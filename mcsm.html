@@ -1,0 +1,1096 @@
+<!DOCTYPE HTML>
+<html lang="cn">
+
+<head>
+    <meta charset="utf-8">
+    <title>MCSM - 雫 OS</title>
+    <style>
+        body {
+            background-color: black;
+        }
+
+        a {
+            font-size: 3em;
+            color: #000000;
+            text-underline-position: under;
+            text-shadow: 0 0 20px #ff9ae4;
+        }
+
+        h2 {
+            color: #000000;
+            text-underline-position: under;
+            text-shadow: 0 0 20px #04ff3b;
+        }
+    </style>
+</head>
+
+<body>
+    <a href="javascript:launchBot()">
+        <h1>启动 MCSM Bot</h1>
+    </a>
+    <h2 id="abc"></h2>
+    <h2>小提示：打开控制台（F12）</h2>
+    <script src="jq.js" type="application/javascript"></script>
+    <script src="axios.js" type="application/javascript"></script>
+    <script>
+        const MIRAI_ADDR = '192.168.1.233:2345'
+        const VERIFY_KEY = '123456'
+        const QQ = 123456
+
+        function launchBot() {
+            if ("WebSocket" in window) {
+                //认证
+                axios.post(`http://${MIRAI_ADDR}/verify`, {
+                    "verifyKey": VERIFY_KEY
+                }).then(function (data) {
+                    //绑定
+                    axios.post(`http://${MIRAI_ADDR}/bind`, {
+                        "sessionKey": data.data.session, "qq": QQ
+                    }).then(function () {
+                        //绑定成功
+                        console.log()
+                        //启动ws连接
+                        var ws = new WebSocket(`ws://${MIRAI_ADDR}/message?verifyKey=${VERIFY_KEY}&qq=${QQ}&sessionKey=${data.data.session}`);
+                        $("#abc").html("<p style=color:green>正在运行</p>");
+
+                        ws.onmessage = function (evt) {
+
+                            ///////DEBUG//////
+                            var DEBUG = true//
+                            //////////////////
+                            var received_msg = evt.data;
+                            //console.log(received_msg);
+                            var msg = JSON.parse(received_msg);
+                            DEBUG && console.log(msg);
+
+                            //判断好友，群聊
+                            if (msg.data.type == 'GroupMessage') {//群聊
+                                //是不是？
+                                if (msg.data.sender.id == "2211717435") {
+                                    sender = msg.data.sender.group.id;
+                                    F = "群";
+                                    sApi = "sendGroupMessage";
+                                    sendResult(sender, F, sApi);
+                                }
+
+                            } else if (msg.data.type == 'FriendMessage') {//好友
+                                if (msg.data.sender.id == "2211717435") {
+                                    sender = msg.data.sender.id
+                                    F = "好友";
+                                    sApi = "sendFriendMessage";
+                                    sendResult(sender, F, sApi);
+                                }
+                            }
+
+                            function sendResult(sender, F, sApi) {
+                                //拆分
+                                var temp = msg.data.messageChain[1].text.split(/[\n\s+,]/g);
+                                for (var i = 0; i < temp.length; i++) {
+                                    if (temp[i] == "") {
+                                        temp.splice(i, 1);
+                                        i--;
+                                    }
+                                }
+
+                                mcsmurl = "http://192.168.1.233:999";
+                                apikey = "123456";
+
+                                //判断口令
+                                if (temp[0] == '/mcsm') {
+                                    switch (temp[1]) {
+                                        //查看面板信息
+                                        case "info":
+                                            axios.get(mcsmurl + '/api/overview?apikey=' + apikey).then(function (overview) {
+                                                //console.log(overview)
+                                                axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                    "sessionKey": data.data.session,
+                                                    "target": sender,
+                                                    "messageChain": [
+                                                        {
+                                                            "type": "Plain",
+                                                            "text": "系统信息：\n- 系统平台：" + overview.data.data.system.platform + "\n"
+                                                        },
+                                                        {
+                                                            "type": "Plain",
+                                                            "text": "- 系统版本：" + overview.data.data.system.version + "\n"
+                                                        },
+                                                        {
+                                                            "type": "Plain",
+                                                            "text": "- Node版本：" + overview.data.data.system.node + "\n"
+                                                        },
+                                                        {
+                                                            "type": "Plain",
+                                                            "text": "- 面板版本：" + overview.data.data.version + "\n"
+                                                        },
+                                                        {
+                                                            "type": "Plain",
+                                                            "text": "- CPU 占用：" + Number(overview.data.data.system.cpu * 100).toFixed(0) + "%\n"
+                                                        },
+                                                        {
+                                                            "type": "Plain",
+                                                            "text": "- 内存占用：" + (Math.round(overview.data.data.system.totalmem / 1024 / 1024 / 1024) - Math.round(overview.data.data.system.freemem / 1024 / 1024 / 1024)) + "G/" + Math.round(overview.data.data.system.totalmem / 1024 / 1024 / 1024) + "G\n"
+                                                        },
+                                                        {
+                                                            "type": "Plain",
+                                                            "text": "- 节点在线/总数：" + overview.data.data.remoteCount.available + "/" + overview.data.data.remoteCount.total + "\n"
+                                                        },
+                                                        // {
+                                                        //     "type": "Plain",
+                                                        //     "text": "- ：" + overview.data.data.system. + "\n"
+                                                        // },
+                                                    ]
+                                                }).then(function () {
+                                                    DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                }).catch(function (error) {
+                                                    console.log(error);
+                                                });
+                                            }).catch(function (error) {
+                                                console.log(error);
+                                            });
+                                            break;
+
+                                        //用户相关
+                                        // /mcsm user reg username password
+                                        //temp[0] 1     2      3      4
+                                        case "user":
+                                            switch (temp[2]) {
+                                                //注册用户(安全起见只创建普通用户)
+                                                case "reg":
+                                                    if (!(temp[4])) {
+                                                        passwd = Math.floor(Math.random() * (999999 + 1))
+                                                    } else {
+                                                        passwd = temp[4]
+                                                    }
+                                                    if (!(temp[3])) {
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": "请输入账号"
+                                                                },
+                                                            ]
+                                                        })
+                                                        return
+                                                    }
+                                                    axios.post(mcsmurl + '/api/auth?apikey=' + apikey, {
+                                                        "username": temp[3],
+                                                        "password": passwd,
+                                                        "permission": 1
+                                                    }).then(function () {
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": "用户 " + temp[3] + " 注册成功，账号为：" + temp[3] + "，密码：" + passwd
+                                                                },
+                                                            ]
+                                                        }).then(function () {
+                                                            DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                        }).catch(function (error) {
+                                                            console.error(error)
+                                                        });
+                                                    }).catch(function (error) {
+                                                        console.log(error);
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": error
+                                                                },
+                                                            ]
+                                                        })
+                                                    });
+                                                    break;
+                                                //删除用户
+                                                case "del":
+                                                    axios.get(mcsmurl + '/api/auth/search?apikey=' + apikey + "&page=1&page_size=9999&userName=" + temp[3]).then(function (findUser) {
+                                                        userUUID = findUser.data.data.data[0].uuid
+                                                        DEBUG && console.log(userUUID)
+                                                        axios({
+                                                            method: 'delete',
+                                                            url: mcsmurl + '/api/auth?apikey=' + apikey,
+                                                            data: [userUUID]
+                                                        }).then(function () {
+                                                            axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                                "sessionKey": data.data.session,
+                                                                "target": sender,
+                                                                "messageChain": [
+                                                                    {
+                                                                        "type": "Plain",
+                                                                        "text": "用户 " + temp[3] + " 删除成功"
+                                                                    },
+                                                                ]
+                                                            }).then(function () {
+                                                                DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                            }).catch(function (error) {
+                                                                console.error(error)
+                                                            });
+                                                        }).catch(function (error) {
+                                                            console.log(error);
+                                                            axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                                "sessionKey": data.data.session,
+                                                                "target": sender,
+                                                                "messageChain": [
+                                                                    {
+                                                                        "type": "Plain",
+                                                                        "text": "[!]" + error
+                                                                    },
+                                                                ]
+                                                            })
+                                                            console.error('已发送错误信息到（' + F + '），sessioKey为' + data.data.session);
+                                                        });
+                                                    })
+                                                    break;
+                                                //封禁用户
+                                                case "ban":
+                                                    uConfig = { "permission": -1, };
+                                                    uSetMsg = "用户 " + temp[3] + " 已永久封禁";
+                                                    userSet(uConfig, uSetMsg);
+                                                    break;
+                                                //解封用户
+                                                case "unban":
+                                                    uConfig = { "permission": 1, };
+                                                    uSetMsg = "用户 " + temp[3] + " 已解封~";
+                                                    userSet(uConfig, uSetMsg);
+                                                    break;
+                                                //清空某用户的所有实例
+                                                case "clear":
+                                                    uConfig = { "instances": [], };
+                                                    uSetMsg = "已清空用户 " + temp[3] + " 名下的所有实例~";
+                                                    userSet(uConfig, uSetMsg);
+                                                    break;
+                                                //给某用户的实例
+                                                // /mcsm user give <r_uuid> <i_uuid>
+                                                case "give":
+                                                    uConfig = {
+                                                        "instances": [
+                                                            {
+                                                                "serviceUuid": temp[4],
+                                                                "instanceUuid": temp[5]
+                                                            }
+                                                        ],
+                                                    };
+                                                    uSetMsg = "已给予用户 " + temp[3] + "在节点" + temp[4] + "下的" + temp[5] + "实例~";
+                                                    userSet(uConfig, uSetMsg);
+                                                    break;
+                                                //查看用户信息
+                                                case "info":
+                                                    axios.get(mcsmurl + '/api/auth/search?apikey=' + apikey + "&page=1&page_size=9999&userName=" + temp[3]).then(function (findUser) {
+                                                        userUUID = findUser.data.data.data[0].uuid;
+                                                        DEBUG && console.log(userUUID);
+                                                        if (!userUUID) {
+                                                            axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                                "sessionKey": data.data.session,
+                                                                "target": sender,
+                                                                "messageChain": [
+                                                                    {
+                                                                        "type": "Plain",
+                                                                        "text": "用户 " + temp[3] + " 不存在\n"
+                                                                    },
+                                                                ]
+                                                            }).then(function () {
+                                                                DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                            }).catch(function (error) {
+                                                                console.error(error)
+                                                            });
+                                                        }
+                                                        axios({
+                                                            method: 'get',
+                                                            url: mcsmurl + '/api/auth?apikey=' + apikey + '&advanced=true' + '&uuid=' + userUUID,
+                                                            headers: {
+                                                                'x-requested-with': 'xmlhttprequest',
+                                                            },
+                                                        }).then(function (response) {
+                                                            console.log(response);
+                                                            axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                                "sessionKey": data.data.session,
+                                                                "target": sender,
+                                                                "messageChain": [
+                                                                    {
+                                                                        "type": "Plain",
+                                                                        "text": "用户 " + temp[3] + " 信息：\n"
+                                                                    },
+                                                                    {
+                                                                        "type": "Plain",
+                                                                        "text": "UUID：" + response.data.data.uuid + "\n"
+                                                                    },
+                                                                    {
+                                                                        "type": "Plain",
+                                                                        "text": "注册时间：" + response.data.data.registerTime + "\n"
+                                                                    },
+                                                                    {
+                                                                        "type": "Plain",
+                                                                        "text": "最后登录：" + response.data.data.loginTime + "\n"
+                                                                    },
+                                                                    {
+                                                                        "type": "Plain",
+                                                                        "text": "拥有实例：" + response.data.data.instances.length + "\n"
+                                                                    },
+                                                                    {
+                                                                        "type": "Plain",
+                                                                        "text": "权限等级：" + response.data.data.permission + "\n"
+                                                                    },
+                                                                ]
+                                                            }).then(function () {
+                                                                DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                            }).catch(function (error) {
+                                                                console.error(error)
+                                                            });
+                                                        })
+                                                    })
+                                                    break;
+                                                //用户列表
+                                                case "list":
+                                                    axios.get(mcsmurl + '/api/auth/overview?apikey=' + apikey).then(function (userList) {
+                                                        DEBUG && console.log(userList);
+                                                        var i;
+                                                        var uLists = "";
+                                                        for (i = 0; i < userList.data.data.length; i++) {
+                                                            if (F === "好友") {
+                                                                uuids = userList.data.data[i].uuid
+                                                            } else {
+                                                                uuids = "***我是马赛克***"
+                                                            }
+                                                            uLists += "[" + i + "] " + userList.data.data[i].userName + "->详情：\n"
+                                                                + "UUID：" + uuids + "\n"
+                                                                + "注册时间：" + userList.data.data[i].registerTime + "\n"
+                                                                + "最后登录：" + userList.data.data[i].loginTime + "\n"
+                                                                + "拥有实例：" + userList.data.data[i].instances.length + "\n"
+                                                                + "权限等级：" + userList.data.data[i].permission + "\n"
+                                                                + "=================\n"
+                                                        }
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": uLists
+                                                                },
+                                                            ]
+                                                        }).then(function () {
+                                                            DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                        }).catch(function (error) {
+                                                            console.error(error)
+                                                        });
+                                                    })
+                                                    break;
+                                                //用户菜单
+                                                default:
+                                                    axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                        "sessionKey": data.data.session,
+                                                        "target": sender,
+                                                        "messageChain": [
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "-=用户菜单=-\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "list 查看所有用户\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "reg [用户名] <密码> 注册用户\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "del [用户名] 删除用户\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "ban [用户名] 封禁用户\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "give [节点UUID] [实例UUID] 给予用户某节点上的某实例\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "clear [用户名] 清除该用户名下的所有实例\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "info [用户名] 查看用户信息\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "*开发中页面，可能是最终品质"
+                                                            }
+                                                        ]
+                                                    }).then(function () {
+                                                        console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                    }).catch(function (error) {
+                                                        console.error(error);
+                                                    });
+                                            }
+
+                                            //更新用户信息函数
+                                            function userSet(uConfig, uSetMsg) {
+                                                axios.get(mcsmurl + '/api/auth/search?apikey=' + apikey + "&page=1&page_size=9999&userName=" + temp[3]).then(function (findUser) {
+                                                    userUUID = findUser.data.data.data[0].uuid
+                                                    DEBUG && console.log(userUUID)
+                                                    axios({
+                                                        method: "put",
+                                                        url: mcsmurl + '/api/auth?apikey=' + apikey,
+                                                        data: {
+                                                            "uuid": userUUID,
+                                                            "config": uConfig
+                                                        },
+                                                    }).then(function () {
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": uSetMsg
+                                                                },
+                                                            ]
+                                                        }).then(function () {
+                                                            DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                        }).catch(function (error) {
+                                                            console.error(error)
+                                                        });
+                                                    }).catch(function (error) {
+                                                        console.log(error);
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": "[!]" + error
+                                                                },
+                                                            ]
+                                                        })
+                                                    });
+                                                })
+                                            }
+                                            break;
+
+                                        //守护进程相关
+                                        // /mcsm daemon add/edit [apikey] [ip] [port] <remarks>
+                                        //temp[0]   1     2         3       4    5       6
+                                        case "daemon":
+                                            switch (temp[2]) {
+                                                //所有守护进程列表
+                                                case "list":
+                                                    axios.get(mcsmurl + '/api/service/remote_services?apikey=' + apikey)
+                                                        .then(function (dList) {
+                                                            DEBUG && console.log(dList);
+                                                            console.log(dList.data.data.length);
+                                                            var i;
+                                                            var dLists = "";
+                                                            for (i = 0; i < dList.data.data.length; i++) {
+                                                                if (F === "好友") {
+                                                                    ips = dList.data.data[i].ip + ":" + dList.data.data[i].port
+                                                                } else {
+                                                                    ips = "***我是马赛克***"
+                                                                }
+                                                                dLists += "[节点-" + i + "] 详情信息：\n"
+                                                                    + "UUID：" + dList.data.data[i].uuid + "\n"
+                                                                    + "IP：" + ips + "\n"
+                                                                    + "备注：" + dList.data.data[i].remarks + "\n"
+                                                                    + "实例数量：" + dList.data.data[i].instances.length + "\n"
+                                                                    + "是否存活：" + dList.data.data[i].available + "\n"
+                                                                    + "==============================\n"
+                                                            }
+                                                            axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                                "sessionKey": data.data.session,
+                                                                "target": sender,
+                                                                "messageChain": [
+                                                                    {
+                                                                        "type": "Plain",
+                                                                        "text": dLists
+                                                                    },
+                                                                ]
+                                                            }).then(function () {
+                                                                DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                            }).catch(function (error) {
+                                                                console.log(error);
+                                                                axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                                    "sessionKey": data.data.session,
+                                                                    "target": sender,
+                                                                    "messageChain": [
+                                                                        {
+                                                                            "type": "Plain",
+                                                                            "text": "[!]" + error
+                                                                        },
+                                                                    ]
+                                                                })
+                                                                console.error('已发送错误信息到（' + F + '），sessioKey为' + data.data.session);
+                                                            });
+                                                        })
+
+                                                    break;
+
+                                                //新增守护进程
+                                                case "add":
+                                                    if (!(temp[6])) {
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": "[!] 添加失败，请输入节点备注！"
+                                                                },
+                                                            ]
+                                                        }).then(function () {
+                                                            DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                        }).catch(function (error) {
+                                                            console.error(error)
+                                                        });
+                                                        return
+                                                    } else {
+                                                        cRemark = temp[6]
+                                                    }
+                                                    axios.post(mcsmurl + '/api/service/remote_service?apikey=' + apikey, {
+                                                        "apiKey": temp[3],
+                                                        "ip": temp[4],
+                                                        "port": temp[5],
+                                                        "remarks": cRemark
+                                                    }).then(function (resUUID) {
+                                                        DEBUG && console.log(resUUID)
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": "[+] 节点 " + temp[6] + " 添加成功，UUID为：" + resUUID.data.data
+                                                                },
+                                                            ]
+                                                        }).then(function () {
+                                                            DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                        }).catch(function (error) {
+                                                            console.error(error)
+                                                        });
+                                                        axios.get(mcsmurl + '/api/service/link_remote_service?apikey=' + apikey + "&uuid=" + resUUID.data.data).then(function () {
+                                                            DEBUG && console.log('已发送（' + F + '）节点重连，sessioKey为' + data.data.session);
+                                                        }).catch(function (error) {
+                                                            console.error(error)
+                                                        });
+                                                    }).catch(function (error) {
+                                                        console.log(error);
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": "[!]" + error
+                                                                },
+                                                            ]
+                                                        })
+                                                    });
+                                                    break;
+
+                                                // /mcsm daemon del [uuid]
+                                                //temp[0]   1    2    3   
+                                                //删除守护进程
+                                                case "del":
+                                                    if (!(temp[3])) {
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": "[!] 删除失败，请输入节点UUID！"
+                                                                },
+                                                            ]
+                                                        }).then(function () {
+                                                            DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                        }).catch(function (error) {
+                                                            console.error(error)
+                                                        });
+                                                        return
+                                                    } else { }
+                                                    axios({
+                                                        method: 'delete',
+                                                        url: mcsmurl + '/api/service/remote_service?apikey=' + apikey,
+                                                        params: { uuid: temp[3] }
+                                                    }).then(function () {
+                                                        DEBUG && console.log()
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": "[-] 节点 " + temp[3] + " 删除成功 :("
+                                                                },
+                                                            ]
+                                                        }).then(function () {
+                                                            DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                        }).catch(function (error) {
+                                                            console.error(error)
+                                                        });
+                                                    }).catch(function (error) {
+                                                        console.log(error);
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": '[!]' + error
+                                                                },
+                                                            ]
+                                                        })
+                                                    });
+                                                    break;
+
+                                                //编辑守护进程配置 [3]->uuid
+                                                case "edit":
+                                                    axios({
+                                                        method: "put",
+                                                        url: mcsmurl + '/api/service/remote_service?apikey=' + apikey,
+                                                        data: {
+                                                            "apiKey": temp[4],
+                                                            "ip": temp[5],
+                                                            "port": temp[6],
+                                                            "remarks": temp[7]
+                                                        },
+                                                        params: { "uuid": temp[3] }
+                                                    }).then(function (resUUID) {
+                                                        DEBUG && console.log(resUUID)
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": "[+] 节点 " + temp[3] + " 信息更新成功"
+                                                                },
+                                                            ]
+                                                        }).then(function () {
+                                                            DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                        }).catch(function (error) {
+                                                            console.error(error)
+                                                        });
+                                                        axios.get(mcsmurl + '/api/service/link_remote_service?apikey=' + apikey + "&uuid=" + temp[3]).then(function () {
+                                                            DEBUG && console.log('已发送（' + F + '）节点重连，sessioKey为' + data.data.session);
+                                                        }).catch(function (error) {
+                                                            console.error(error)
+                                                        });
+                                                    }).catch(function (error) {
+                                                        console.log(error);
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": "[!]" + error
+                                                                },
+                                                            ]
+                                                        })
+                                                    });
+                                                    break;
+
+                                                //重连远程服务
+                                                case "link":
+                                                    if (!(temp[3])) {
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": "[!] 请输入节点的UUID！"
+                                                                },
+                                                            ]
+                                                        }).catch(function (error) {
+                                                            console.error(error)
+                                                        });
+                                                        return
+                                                    }
+                                                    axios.get(mcsmurl + '/api/service/link_remote_service?apikey=' + apikey + "&uuid=" + temp[3])
+                                                        .then(function () {
+                                                            axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                                "sessionKey": data.data.session,
+                                                                "target": sender,
+                                                                "messageChain": [
+                                                                    {
+                                                                        "type": "Plain",
+                                                                        "text": "[+] 已向节点 " + temp[3] + " 发送连接指令"
+                                                                    },
+                                                                ]
+                                                            }).then(function () {
+                                                                DEBUG && console.log('已发送（' + F + '）节点重连，sessioKey为' + data.data.session);
+                                                            }).catch(function (error) {
+                                                                console.error(error.code)
+                                                            });
+                                                        }).catch(function (error) {
+                                                            console.error(error.toJSON());
+                                                            axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                                "sessionKey": data.data.session,
+                                                                "target": sender,
+                                                                "messageChain": [
+                                                                    {
+                                                                        "type": "Plain",
+                                                                        "text": "[!] 节点 " + temp[3] + " 连接失败 :(\n原因：" + error.toJSON().message
+                                                                    },
+                                                                ]
+                                                            });
+                                                        });
+                                                    break;
+
+                                                //daemon菜单
+                                                default:
+                                                    axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                        "sessionKey": data.data.session,
+                                                        "target": sender,
+                                                        "messageChain": [
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "-=守护进程菜单=-\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "list 查看守护进程列表\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "add [apikey] [ip] [port] <remarks> 添加新的守护进程\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "edit [uuid] [apikey] [ip] [port] <remarks> 编辑守护进程信息\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "del [uuid] 删除守护进程\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "link [uuid] 重连守护进程\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "*开发中页面，可能是最终品质"
+                                                            }
+                                                        ]
+                                                    }).then(function () {
+                                                        console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                    }).catch(function (error) {
+                                                        console.error(error);
+                                                    });
+                                            }
+                                            break;
+
+                                        //实例相关
+                                        //mcsm      i [open]/[stop]/[restart]/[kill]/[log] <r_uuid> <i_uuid> 
+                                        //temp[0]   1             2                             3      4   
+                                        case "i":
+                                            if (!(temp[3])) { r_uuid = localStorage.getItem("r_uuid") }
+                                            else { r_uuid = temp[3] }
+                                            if (!(temp[4])) { i_uuid = localStorage.getItem("i_uuid") }
+                                            else { i_uuid = temp[4] }
+
+                                            switch (temp[2]) {
+                                                //开启实例
+                                                case "open":
+                                                    operate = "open"
+                                                    oI(operate);
+                                                    break;
+                                                //关闭实例
+                                                case "stop":
+                                                    operate = "stop"
+                                                    oI(operate);
+                                                    break;
+                                                //重启实例
+                                                case "restart":
+                                                    operate = "restart"
+                                                    oI(operate);
+                                                    break;
+                                                //终止实例
+                                                case "kill":
+                                                    operate = "kill";
+                                                    oI(operate);
+                                                    break;
+
+                                                //获取实例输出的内容
+                                                case "log":
+                                                    axios.get(mcsmurl + '/api/protected_instance/outputlog?apikey=' + apikey + '&uuid=' + i_uuid + '&remote_uuid=' + r_uuid)
+                                                        .then(function (iLog) {
+                                                            DEBUG && console.log(iLog);
+                                                            axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                                "sessionKey": data.data.session,
+                                                                "target": sender,
+                                                                "messageChain": [
+                                                                    {
+                                                                        "type": "Plain",
+                                                                        "text": iLog.data.data
+                                                                    },
+                                                                ]
+                                                            }).then(function () {
+                                                                DEBUG && console.log('已发送Log到（' + F + '），sessioKey为' + data.data.session);
+                                                            }).catch(function (error) {
+                                                                console.log(error);
+                                                            });
+
+                                                        })
+                                                    break;
+
+                                                //实例操作菜单
+                                                default:
+                                                    axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                        "sessionKey": data.data.session,
+                                                        "target": sender,
+                                                        "messageChain": [
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "-=实例操作菜单=-\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "open <r_uuid> <i_uuid> 启动实例\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "stop <r_uuid> <i_uuid> 关闭实例\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "restart <r_uuid> <i_uuid> 重启实例\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "kill <r_uuid> <i_uuid> 终止实例\n"
+                                                            },
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "log <r_uuid> <i_uuid> 查看实例输出(不一定发的出去)"
+                                                            },
+                                                        ]
+                                                    }).then(function () {
+                                                        DEBUG && console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                                    }).catch(function (error) {
+                                                        console.log(error);
+                                                    });
+                                            }
+
+                                            //实例操作函数
+                                            function oI(operate) {
+                                                axios.get(mcsmurl + '/api/protected_instance/' + operate + '?apikey=' + apikey + '&uuid=' + i_uuid + '&remote_uuid=' + r_uuid)
+                                                    .then(function () {
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": '[/] ' + operate + ' 实例 ' + i_uuid + ' 成功'
+                                                                },
+                                                            ]
+                                                        }).then(function () {
+                                                            DEBUG && console.log('已发送' + operate + '（' + F + '），sessioKey为' + data.data.session);
+                                                        }).catch(function (error) {
+                                                            console.log(error);
+                                                        });
+                                                    }).catch(function (error) {
+                                                        console.warn(error)
+                                                        axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                            "sessionKey": data.data.session,
+                                                            "target": sender,
+                                                            "messageChain": [
+                                                                {
+                                                                    "type": "Plain",
+                                                                    "text": "[!]" + error
+                                                                },
+                                                            ]
+                                                        })
+                                                        console.error('已发送错误信息到（' + F + '），sessioKey为' + data.data.session);
+                                                    })
+                                            }
+                                            break;
+
+                                        //实例发送指令（不需要加i）还有 /
+                                        //mcsm send [msg] <r_uuid> <i_uuid>
+                                        //temp[0] 1   2      3         4
+                                        //发送的指令空格使用&或者%20代替
+                                        case "send":
+                                            if (!(temp[2])) {
+                                                return
+                                            } else {
+                                                sendMsg = temp[2].replace(/[\n\&+,]/g, "%20")
+                                            }
+
+                                            if (!(temp[3])) { r_uuid = localStorage.getItem("r_uuid") }
+                                            else { r_uuid = temp[3] }
+                                            if (!(temp[4])) { i_uuid = localStorage.getItem("i_uuid") }
+                                            else { i_uuid = temp[4] }
+
+                                            axios.get(mcsmurl + '/api/protected_instance/command?apikey=' + apikey + '&uuid=' + i_uuid + '&remote_uuid=' + r_uuid + "&command=" + sendMsg)
+                                                .then(function () {
+                                                    axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                        "sessionKey": data.data.session,
+                                                        "target": sender,
+                                                        "messageChain": [
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": '[✈] 给实例' + i_uuid + ' 实例发送命令' + sendMsg + ' 成功\n'
+                                                            },
+                                                        ]
+                                                    }).then(function () {
+                                                        DEBUG && console.log('已发送' + sendMsg + '（' + F + '），sessioKey为' + data.data.session);
+                                                    }).catch(function (error) {
+                                                        console.log(error);
+                                                    });
+
+                                                }).catch(function (error) {
+                                                    console.warn(error)
+                                                    axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                        "sessionKey": data.data.session,
+                                                        "target": sender,
+                                                        "messageChain": [
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "[!]" + error
+                                                            },
+                                                        ]
+                                                    })
+                                                    console.error('已发送错误信息到（' + F + '），sessioKey为' + data.data.session);
+                                                })
+                                            break;
+
+                                        //设置默认值
+                                        case "set":
+                                            switch (temp[2]) {
+                                                //设置默认[实例]的UUID
+                                                case "i_uuid":
+                                                    localStorage.setItem("i_uuid", temp[3]);
+                                                    axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                        "sessionKey": data.data.session,
+                                                        "target": sender,
+                                                        "messageChain": [
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "[+] 已设置默认操作的[实例]UUID为：" + temp[3]
+                                                            },
+                                                        ]
+                                                    }).catch(function (error) {
+                                                        console.error(error)
+                                                    });
+                                                    break;
+                                                case "r_uuid":
+                                                    localStorage.setItem("r_uuid", temp[3]);
+                                                    axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                        "sessionKey": data.data.session,
+                                                        "target": sender,
+                                                        "messageChain": [
+                                                            {
+                                                                "type": "Plain",
+                                                                "text": "[+] 已设置默认操作的[节点]UUID为：" + temp[3]
+                                                            },
+                                                        ]
+                                                    }).catch(function (error) {
+                                                        console.error(error)
+                                                    });
+                                                    break;
+                                            }
+                                            break;
+
+                                        //mcsm主菜单
+                                        default:
+                                            axios.post(`http://${MIRAI_ADDR}/${sApi}`, {
+                                                "sessionKey": data.data.session,
+                                                "target": sender,
+                                                "messageChain": [
+                                                    {
+                                                        "type": "Plain",
+                                                        "text": "MCSManager 菜单\n"
+                                                    },
+                                                    {
+                                                        "type": "Plain",
+                                                        "text": "====面板相关====\n"
+                                                    },
+                                                    {
+                                                        "type": "Plain",
+                                                        "text": "info 查看面板信息\n"
+                                                    },
+                                                    {
+                                                        "type": "Plain",
+                                                        "text": "====用户相关====\n"
+                                                    },
+                                                    {
+                                                        "type": "Plain",
+                                                        "text": "user 用户子菜单\n"
+                                                    },
+                                                    {
+                                                        "type": "Plain",
+                                                        "text": "====守护进程相关====\n"
+                                                    },
+                                                    {
+                                                        "type": "Plain",
+                                                        "text": "daemon 节点子菜单\n"
+                                                    },
+                                                    {
+                                                        "type": "Plain",
+                                                        "text": "====实例相关====\n"
+                                                    },
+                                                    {
+                                                        "type": "Plain",
+                                                        "text": "i 实例子菜单\n"
+                                                    },
+                                                    {
+                                                        "type": "Plain",
+                                                        "text": "set r_uuid [r_uuid] 设置默认操作的节点\n"
+                                                    },
+                                                    {
+                                                        "type": "Plain",
+                                                        "text": "set i_uuid [i_uuid] 设置默认操作的实例\n"
+                                                    },
+                                                    {
+                                                        "type": "Plain",
+                                                        "text": "send [CMD] <r_uuid> <i_uuid> 给实例发送命令\n"
+                                                    },
+                                                    {
+                                                        "type": "Plain",
+                                                        "text": "*开发中页面，可能是最终品质"
+                                                    }
+                                                ]
+                                            }).then(function () {
+                                                console.log('已发送（' + F + '），sessioKey为' + data.data.session);
+                                            }).catch(function (error) {
+                                                console.error(error);
+                                            });
+                                    }
+                                }
+                            }
+                        };
+
+                        ws.onclose = function () {
+                            console.error('已离线');
+                            document.title = '已离线！->MCSM Bot';
+                            $("#abc").html("<p style=color:red>已离线</p>");
+                        };
+
+                    }).catch(function (error) {
+                        console.log(error);
+                    });
+                }).catch(function (error) {
+                    console.log(error);
+                });
+
+            }
+
+            else {
+                // 浏览器不支持 WebSocket
+                alert("您的浏览器不支持 WebSocket!");
+            }
+        }
+    </script>
+</body>
+
+</html>
